@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Feed Proyectado – @maternelle.pe</title>
+
+<!-- Fuente -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --gap: 12px;
+    --cols: 3;
+    --radius: 16px;
+    --shadow: 0 8px 22px rgba(36,26,57,.12);
+    --bg-base:#faf7ff;
+    --ink:#241a39;
+    --accent:#4f46e5;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:"Quicksand", Arial, sans-serif;
+    background:var(--bg-base);
+    color:var(--ink);
+    display:flex; flex-direction:column; align-items:center;
+  }
+
+  /* Fondo holográfico */
+  .bg{
+    position:fixed; inset:0; z-index:0; overflow:hidden;
+    background: conic-gradient(from 0deg, #f0eaff,#dcd0ff,#fbe7ff,#ffeef8,#eaf6ff,#eafff6,#dcd0ff,#f0eaff);
+    filter: blur(60px) saturate(110%) brightness(105%);
+    animation: spin 60s linear infinite; opacity:.9;
+  }
+  @keyframes spin{from{transform:rotate(0)} to{transform:rotate(360deg)}}
+
+  header{
+    position:relative; z-index:1; padding:20px; text-align:center;
+    background:rgba(255,255,255,.5); backdrop-filter: blur(10px);
+    border-radius:20px; margin:16px;
+  }
+  header h1{margin:0; font-size:1.4rem;}
+  header p{margin:6px 0 0; font-size:.9rem; opacity:.7}
+
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:12px
+  }
+  .btn, label.btn{
+    background:#fff; border:1px solid #ddd; color:var(--ink);
+    padding:10px 12px; border-radius:14px; cursor:pointer;
+    font-weight:600; font-size:14px; box-shadow:var(--shadow);
+  }
+  .btn.accent{background:var(--accent); color:#fff; border:none}
+  .btn.ghost{background:transparent; border:1px dashed var(--ink); opacity:.7}
+
+  .controls{display:flex; gap:14px; flex-wrap:wrap; align-items:center; justify-content:center; margin-top:10px}
+  .control{display:flex; gap:8px; align-items:center; font-size:13px; color:var(--ink)}
+  input[type="range"], select, input[type="checkbox"]{accent-color:var(--accent)}
+
+  main{
+    position:relative; z-index:1;
+    width:95%; max-width:1000px;
+    display:grid; gap:var(--gap);
+    grid-template-columns: repeat(var(--cols),1fr);
+    padding:20px;
+  }
+  .item{position:relative; border-radius:var(--radius); overflow:hidden; background:#fff; box-shadow:var(--shadow)}
+  .item.dragging{opacity:.6; outline:2px dashed var(--accent)}
+  .thumb{width:100%; display:block; object-fit:cover}
+  .ratio{aspect-ratio:1/1}
+  .ratio-45{aspect-ratio:4/5}
+  .ratio-169{aspect-ratio:16/9}
+  .remove{position:absolute; top:6px; right:6px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:10px; padding:6px 8px; font-size:12px; cursor:pointer}
+
+  footer{color:#333; font-size:12px; text-align:center; padding:20px; opacity:.6}
+</style>
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+
+  <header>
+    <h1>@maternelle.pe</h1>
+    <p>Feed proyectado – prueba antes de publicar</p>
+    <div class="toolbar">
+      <label class="btn accent" for="fileInput">➕ Añadir imágenes</label>
+      <input id="fileInput" type="file" accept="image/*" multiple hidden />
+      <button id="clearBtn" class="btn ghost">🗑️ Limpiar</button>
+    </div>
+    <div class="controls">
+      <div class="control">
+        <span>Columnas</span>
+        <select id="colsSel">
+          <option value="3" selected>3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+      </div>
+      <div class="control">
+        <span>Espacio</span>
+        <input id="gapRange" type="range" min="0" max="24" value="12" />
+        <span id="gapVal">12px</span>
+      </div>
+      <div class="control">
+        <span>Proporción</span>
+        <select id="ratioSel">
+          <option value="1">1:1 (cuadrado)</option>
+          <option value="45">4:5 (vertical IG)</option>
+          <option value="169">16:9 (horizontal)</option>
+        </select>
+      </div>
+      <div class="control">
+        <span id="count">0 fotos</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="grid" aria-live="polite"></main>
+
+  <footer>
+    Hecho con ❤️ para previsualizar tu feed. Hasta 24 imágenes desde GitHub o cargadas manualmente.
+  </footer>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const fileInput = document.getElementById('fileInput');
+    const clearBtn = document.getElementById('clearBtn');
+    const colsSel = document.getElementById('colsSel');
+    const gapRange = document.getElementById('gapRange');
+    const gapVal = document.getElementById('gapVal');
+    const ratioSel = document.getElementById('ratioSel');
+    const count = document.getElementById('count');
+    let currentRatioClass = 'ratio';
+
+    // GitHub settings
+    const githubUser = "tuusuario";  // 🔹 cámbialo
+    const repo = "feed-preview";     // 🔹 cámbialo
+    const path = "img";              // carpeta "img"
+
+    // Intentar cargar hasta 24 imágenes, pero solo mostrar las que existen
+    for (let i = 1; i <= 24; i++) {
+      const src = `https://${githubUser}.github.io/${repo}/${path}/post${i}.jpg`;
+      checkAndAdd(src);
+    }
+
+    function checkAndAdd(url) {
+      fetch(url, { method: 'HEAD' }).then(res => {
+        if (res.ok) addImage(url);
+      });
+    }
+
+    function updateStats(){
+      count.textContent = `${grid.children.length} foto${grid.children.length===1?'':'s'}`;
+    }
+    function setCols(n){document.documentElement.style.setProperty('--cols', n);}
+    function setGap(px){document.documentElement.style.setProperty('--gap', px+'px'); gapVal.textContent = px+'px';}
+    function setRatio(r){
+      const klass = r==='45'?'ratio-45':r==='169'?'ratio-169':'ratio';
+      currentRatioClass = klass;
+      [...grid.children].forEach(it=>{
+        const img = it.querySelector('img');
+        img.classList.remove('ratio','ratio-45','ratio-169');
+        img.classList.add(klass);
+      });
+    }
+
+    function makeItem(src){
+      const wrap = document.createElement('div');
+      wrap.className = 'item'; wrap.draggable = true;
+      const img = document.createElement('img');
+      img.src = src; img.alt="foto"; img.className = `thumb ${currentRatioClass}`;
+      const rm = document.createElement('button');
+      rm.className = 'remove'; rm.textContent = '✕';
+      rm.addEventListener('click', ()=>{ wrap.remove
